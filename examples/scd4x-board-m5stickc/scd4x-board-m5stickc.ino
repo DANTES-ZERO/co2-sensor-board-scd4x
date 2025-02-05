@@ -1,4 +1,5 @@
 /******************************************************************************/
+#define M5AtomS3_EN
 //#define M5STICKC_PULS_EN      // Enable M5StickC Plus
 //#define UPLOAD_DATA_EN        // Enable upload data to Ambient
 //#define ALERT_LED_BUZZER_EN   // Enable LED & Buzzer alert
@@ -30,7 +31,9 @@ const float ALERT_LV2_HUMI_MAX = 65.0;
 const int ALERT_BUZZER_REPEAT_NUM = 3;  // (default: 3, range:1-10)
 /******************************************************************************/
 
-#if defined(M5STICKC_PULS_EN)
+#if defined(M5AtomS3_EN)
+#include <M5Unified.h>
+#elif defined(M5STICKC_PULS_EN)
 #include "M5StickCPlus.h"
 #else
 #include "M5StickC.h"
@@ -42,8 +45,8 @@ const int ALERT_BUZZER_REPEAT_NUM = 3;  // (default: 3, range:1-10)
 #include "Ambient.h"
 #endif
 
-#include <SensirionI2CScd4x.h>
-SensirionI2CScd4x scd4x;
+#include <SensirionI2cScd4x.h>
+SensirionI2cScd4x scd4x;
 TwoWire Wire2 = TwoWire(2);
 
 #if defined(UPLOAD_DATA_EN)
@@ -58,8 +61,8 @@ const int WIFI_CON_WAIT_TIMEOUT_MS   = 180000;
 const int SCD4X_READ_MIN_INTERVAL_S  = 5; // wait for measurement
 const int SCD4X_FRC_INTERVAL_S       = 300;  // wait for FRC
 
-const int I2C_SCL_PIN = 26;
-const int I2C_SDA_PIN = 0;
+const int I2C_SCL_PIN = 5;
+const int I2C_SDA_PIN = 6;
 
 #if defined(UPLOAD_DATA_EN)
 const int CPU_FREQ_MHZ = 80;
@@ -140,16 +143,16 @@ float convBattVoltageToPercent(float batVol) {
 }
 
 void drawStatus(D_STS sts) {
-    M5.Lcd.setTextSize(1);
-    M5.Lcd.setTextColor(WHITE);
+    M5.Display.setTextSize(1);
+    M5.Display.setTextColor(WHITE);
 #if defined(M5STICKC_PULS_EN)
-    M5.Lcd.setCursor(0, 20);
-    M5.Lcd.fillRect(0, 20, 135, 20, BLACK);
+    M5.Display.setCursor(0, 20);
+    M5.Display.fillRect(0, 20, 135, 20, BLACK);
 #else
-    M5.Lcd.setCursor(0, 10);
-    M5.Lcd.fillRect(0, 10, 160, 20, BLACK);
+    M5.Display.setCursor(0, 10);
+    M5.Display.fillRect(0, 10, 160, 20, BLACK);
 #endif
-    M5.Lcd.print(D_STS_MSG[sts]);
+    M5.Display.print(D_STS_MSG[sts]);
 }
 
 #if defined(M5STICKC_PULS_EN)
@@ -163,24 +166,26 @@ void buzzerAck() {
 void initM5() {
     current_sts = D_STS_NO_ERR;
     
-    M5.begin();
+    auto cfg = M5.config();
+    M5.begin(cfg);
+    
     setCpuFrequencyMhz(CPU_FREQ_MHZ);
-    M5.Axp.ScreenBreath(LCD_BRIGHTNESS_LV);
-    M5.Lcd.fillScreen(BLACK);
-    M5.Lcd.setRotation(0);
-    M5.Lcd.setTextColor(WHITE);
-    M5.Lcd.setCursor(0, 0);
+    // M5.Power.Axp2101.ScreenBreath(LCD_BRIGHTNESS_LV);
+    M5.Display.fillScreen(BLACK);
+    M5.Display.setRotation(0);
+    M5.Display.setTextColor(WHITE);
+    M5.Display.setCursor(0, 0);
 #if defined(M5STICKC_PULS_EN)
-    M5.Lcd.setTextSize(2);
+    M5.Display.setTextSize(2);
 #else
-    M5.Lcd.setTextSize(1);
+    M5.Display.setTextSize(1);
 #endif
-    M5.Lcd.print("CO2 Monitor");
+    M5.Display.print("CO2 Monitor");
     drawStatus(D_STS_INITIALIZING);
 
     // set LED off
-    pinMode(GPIO_NUM_10, OUTPUT);
-    digitalWrite(GPIO_NUM_10, HIGH);
+    // pinMode(GPIO_NUM_10, OUTPUT);
+    // digitalWrite(GPIO_NUM_10, HIGH);
     
 #if defined(M5STICKC_PULS_EN) && defined(ALERT_LED_BUZZER_EN)
     M5.Beep.setVolume(10);
@@ -196,9 +201,9 @@ void initM5() {
     if (M5.BtnA.isPressed()) {
         setupCalibMode = true;
     }
-    if (M5.BtnB.isPressed()) {
-        setupAscMode = true;
-    }
+    // if (M5.BtnB.isPressed()) {
+    //     setupAscMode = true;
+    // }
 }
 
 #if defined(UPLOAD_DATA_EN)
@@ -228,7 +233,7 @@ void setupSCD4x() {
     current_sts = D_STS_MEASURING;
 
     Wire2.begin(I2C_SDA_PIN,I2C_SCL_PIN);
-    scd4x.begin(Wire2);
+    scd4x.begin(Wire2,SCD40_I2C_ADDR_62);
 
     // stop potentially previously started measurement
     error = scd4x.stopPeriodicMeasurement();
@@ -239,7 +244,8 @@ void setupSCD4x() {
         current_sts = D_STS_READ_DATA_ERR;
     }
 
-    error = scd4x.getAutomaticSelfCalibration(ascSts);
+    // error = scd4x.getAutomaticSelfCalibration(ascSts);
+    error = scd4x.getAutomaticSelfCalibrationEnabled(ascSts);
     if (error) {
         Serial.print("Error trying to execute getAutomaticSelfCalibration(): ");
         errorToString(error, errorMessage, 256);
@@ -253,7 +259,8 @@ void setupSCD4x() {
         } else {
             ascSts = ASC_STS_ENABLE;
         }
-        error = scd4x.setAutomaticSelfCalibration(ascSts);
+        // error = scd4x.setAutomaticSelfCalibration(ascSts);
+        error = scd4x.setAutomaticSelfCalibrationEnabled(ascSts);
         if (error) {
             Serial.print("Error trying to execute setAutomaticSelfCalibration(): ");
             errorToString(error, errorMessage, 256);
@@ -363,23 +370,23 @@ void updateData() {
     drawStatus(current_sts);
 
     // Read battery voltage
-    float battVol = M5.Axp.GetBatVoltage();
-    float battVolPer = convBattVoltageToPercent(battVol);
-    char valBattVolStr[10];
-    char valBattVolPerStr[10];
-    char drawValBattStr[16];
-    dtostrf(battVol,1,2,valBattVolStr);
-    dtostrf(battVolPer,3,0,valBattVolPerStr);
-    sprintf(drawValBattStr,"%s%%(%s)",valBattVolPerStr,valBattVolStr);
-    // serial print val
-    for (i = 0;i < D_TYPE_MAX; i++) {
-        Serial.print(D_TYPE_LABEL_STR[i]);
-        Serial.print(drawValStr[i]);
-        Serial.print(D_TYPE_UNIT_STR[i]);
-        Serial.print(", ");
-    }
-    Serial.print(drawValBattStr);
-    Serial.println();
+    // float battVol = M5.Power.Axp2101.GetBatVoltage();
+    // float battVolPer = convBattVoltageToPercent(battVol);
+    // char valBattVolStr[10];
+    // char valBattVolPerStr[10];
+    // char drawValBattStr[16];
+    // dtostrf(battVol,1,2,valBattVolStr);
+    // dtostrf(battVolPer,3,0,valBattVolPerStr);
+    // sprintf(drawValBattStr,"%s%%(%s)",valBattVolPerStr,valBattVolStr);
+    // // serial print val
+    // for (i = 0;i < D_TYPE_MAX; i++) {
+    //     Serial.print(D_TYPE_LABEL_STR[i]);
+    //     Serial.print(drawValStr[i]);
+    //     Serial.print(D_TYPE_UNIT_STR[i]);
+    //     Serial.print(", ");
+    // }
+    // Serial.print(drawValBattStr);
+    // Serial.println();
 
     // draw string val
     uint16_t alert_on = 0;
@@ -408,54 +415,54 @@ void updateData() {
         alert_on = 1;
     }
 #if defined(M5STICKC_PULS_EN)
-    M5.Lcd.fillRect(0, 20, 135, 220, BLACK);
+    M5.Display.fillRect(0, 20, 135, 220, BLACK);
     for (i = 0; i < D_TYPE_MAX; i++) {
-        M5.Lcd.setTextSize(2);
-        M5.Lcd.setTextColor(WHITE);
-        M5.Lcd.setCursor(0, 50*i+40);
-        M5.Lcd.print(D_TYPE_LABEL_STR[i]);
-        M5.Lcd.setTextSize(1);
-        M5.Lcd.setCursor(117, 50*i+74);
-        M5.Lcd.print(D_TYPE_UNIT_STR[i]);
-        M5.Lcd.setTextSize(3);
-        M5.Lcd.setTextColor(valAlertLvColor[i]);
-        M5.Lcd.setCursor(18, 50*i+60);
-        M5.Lcd.print(drawValStr[i]);
+        M5.Display.setTextSize(2);
+        M5.Display.setTextColor(WHITE);
+        M5.Display.setCursor(0, 50*i+40);
+        M5.Display.print(D_TYPE_LABEL_STR[i]);
+        M5.Display.setTextSize(1);
+        M5.Display.setCursor(117, 50*i+74);
+        M5.Display.print(D_TYPE_UNIT_STR[i]);
+        M5.Display.setTextSize(3);
+        M5.Display.setTextColor(valAlertLvColor[i]);
+        M5.Display.setCursor(18, 50*i+60);
+        M5.Display.print(drawValStr[i]);
     }
-    M5.Lcd.setTextSize(2);
-    M5.Lcd.setTextColor(WHITE);
-    M5.Lcd.setCursor(2, 208);
-    M5.Lcd.print(drawValBattStr);
-    M5.Lcd.setTextSize(1);
-    M5.Lcd.setCursor(117, 230);
-    M5.Lcd.print(ASC_STS_STR[ascSts]);
+    // M5.Display.setTextSize(2);
+    // M5.Display.setTextColor(WHITE);
+    // M5.Display.setCursor(2, 208);
+    // M5.Display.print(drawValBattStr);
+    M5.Display.setTextSize(1);
+    M5.Display.setCursor(117, 230);
+    M5.Display.print(ASC_STS_STR[ascSts]);
 #else
-    M5.Lcd.fillRect(0, 10, 80, 150, BLACK);
+    M5.Display.fillRect(0, 10, 80, 150, BLACK);
     for (i = 0; i < D_TYPE_MAX; i++) {
-        M5.Lcd.setTextSize(1);
-        M5.Lcd.setTextColor(WHITE);
-        M5.Lcd.setCursor(0, 40*i+30);
-        M5.Lcd.print(D_TYPE_LABEL_STR[i]);
-        M5.Lcd.setTextSize(1);
-        M5.Lcd.setCursor(62, 40*i+46);
-        M5.Lcd.print(D_TYPE_UNIT_STR[i]);
-        M5.Lcd.setTextSize(2);
-        M5.Lcd.setTextColor(valAlertLvColor[i]);
-        M5.Lcd.setCursor(0, 40*i+40);
-        M5.Lcd.print(drawValStr[i]);
+        M5.Display.setTextSize(1);
+        M5.Display.setTextColor(WHITE);
+        M5.Display.setCursor(0, 40*i+30);
+        M5.Display.print(D_TYPE_LABEL_STR[i]);
+        M5.Display.setTextSize(1);
+        M5.Display.setCursor(62, 40*i+46);
+        M5.Display.print(D_TYPE_UNIT_STR[i]);
+        M5.Display.setTextSize(2);
+        M5.Display.setTextColor(valAlertLvColor[i]);
+        M5.Display.setCursor(0, 40*i+40);
+        M5.Display.print(drawValStr[i]);
     }
-    M5.Lcd.setTextSize(1);
-    M5.Lcd.setTextColor(WHITE);
-    M5.Lcd.setCursor(0, 150);
-    M5.Lcd.print(drawValBattStr);
-    M5.Lcd.setCursor(62, 150);
-    M5.Lcd.print(ASC_STS_STR[ascSts]);
+    M5.Display.setTextSize(1);
+    M5.Display.setTextColor(WHITE);
+    // M5.Display.setCursor(0, 150);
+    // M5.Display.print(drawValBattStr);
+    M5.Display.setCursor(62, 150);
+    M5.Display.print(ASC_STS_STR[ascSts]);
 #endif /* defined(M5STICKC_PULS_EN) */
 
 #if defined(ALERT_LED_BUZZER_EN)
     // LED & Buzzer on if alert level 3
     if (alert_on) {
-        digitalWrite(GPIO_NUM_10, LOW);
+        // digitalWrite(GPIO_NUM_10, LOW);
 #if defined(M5STICKC_PULS_EN)
         // buzzer on
         for (i = 0; i < ALERT_BUZZER_REPEAT_NUM; i++) {
@@ -466,7 +473,7 @@ void updateData() {
         }
 #endif
     } else {
-        digitalWrite(GPIO_NUM_10, HIGH);
+        // digitalWrite(GPIO_NUM_10, HIGH);
     }
 #endif
 
